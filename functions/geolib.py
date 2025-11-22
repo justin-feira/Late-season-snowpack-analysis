@@ -1,4 +1,5 @@
 import sys
+import pandas as pd
 sys.path.append('./Setup')
 from gee_setup import *
 setup_gee()
@@ -37,3 +38,65 @@ def get_image_collection_info(collection_name, start_date='2020-01-01', end_date
     except Exception as e:
         print(f"Error accessing collection {collection_name}: {e}")
         return None
+    
+
+def ndsi_l5(image):
+    """Calculate NDSI for Landsat 5/7 (Green=B2, SWIR=B5)"""
+    ndsi = image.normalizedDifference(['SR_B2', 'SR_B5']).rename('NDSI')
+    snow_mask = ndsi.gt(0.4).And(image.select('SR_B2').gt(1100)).rename('snow_cover')
+    return image.addBands([ndsi, snow_mask])
+
+def ndsi_l9(image):
+    """Calculate NDSI for Landsat 8/9 (Green=B3, SWIR=B6)"""
+    ndsi = image.normalizedDifference(['SR_B3', 'SR_B6']).rename('NDSI')
+    snow_mask = ndsi.gt(0.4).And(image.select('SR_B3').gt(1100)).rename('snow_cover')
+    return image.addBands([ndsi, snow_mask])
+
+def mask_clouds_landsat(image):
+   
+    qa = image.select('QA_PIXEL')
+    
+    # Correct bit assignments for Landsat Collection 2
+    cloud_bit_mask = (1 << 3)        # Bit 3: Cloud
+    cloud_shadow_bit_mask = (1 << 4)  # Bit 4: Cloud Shadow
+    cirrus_bit_mask = (1 << 2)       # Bit 2: Cirrus (L8/L9)
+    
+    # Clear conditions = all these bits should be 0
+    mask = qa.bitwiseAnd(cloud_bit_mask).eq(0) \
+             .And(qa.bitwiseAnd(cloud_shadow_bit_mask).eq(0)) \
+             .And(qa.bitwiseAnd(cirrus_bit_mask).eq(0))
+    
+    return image.updateMask(mask)
+
+## view the number of images available in each individual year, along with each individual week
+
+def count_images_by_year(collection):
+    def year_count(year):
+        start = ee.Date.fromYMD(year, 1, 1)
+        end = start.advance(1, 'year')
+        count = collection.filterDate(start, end).size()
+        return ee.Feature(None, {'year': year, 'image_count': count})
+    
+    years = ee.List.sequence(1980, 2025)
+    counts = years.map(year_count)
+    return ee.FeatureCollection(counts)
+
+def image_count(collection, start_year, end_year):
+    counts = []
+    for year in range(start_year, end_year + 1):
+        start = ee.Date.fromYMD(year, 1, 1)
+        end = start.advance(1, 'year')
+        count = collection.filterDate(start, end).size().getInfo()
+        counts.append({'year': year, 'image_count': count})
+    return pd.DataFrame(counts)
+## add a week function to further identify time frame with most images
+def count_images_by_week(collection, year):
+    def week_count(week):
+        start = ee.Date.fromYMD(year, 1, 1).advance(week, 'week')
+        end = start.advance(1, 'week')
+        count = collection.filterDate(start, end).size()
+        return ee.Feature(None, {'week': week, 'image_count': count})
+    
+    weeks = ee.List.sequence(0, 51)
+    counts = weeks.map(week_count)
+    return ee.FeatureCollection(counts)
