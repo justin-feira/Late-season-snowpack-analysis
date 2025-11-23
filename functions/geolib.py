@@ -107,7 +107,6 @@ def yearly_composite(year, collection):
     year_images = collection.filter(ee.Filter.calendarRange(year, year, 'year'))
     count = year_images.size()
     composite = year_images.mean()
-    #print(f"Year: {year}, Image Count: {count.getInfo()}")
     return composite.set('year', year).set('image_count', count)
 
 def create_weighted_average(collection) -> ee.Image:
