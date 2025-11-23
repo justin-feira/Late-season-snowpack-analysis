@@ -319,7 +319,10 @@ def main():
                     
                     # Show analysis parameters
                     with st.expander("📋 Analysis Parameters Used", expanded=False):
-                        st.write(f"**Region:** Custom polygon with {len(drawn_polygon.get('geometry', {}).get('coordinates', [[]])[0])} vertices")
+                        # Safely get polygon info
+                        polygon_coords = drawn_polygon.get('geometry', {}).get('coordinates', [[]])
+                        num_vertices = len(polygon_coords[0]) if polygon_coords and len(polygon_coords) > 0 else 0
+                        st.write(f"**Region:** Custom polygon with {num_vertices} vertices")
                         st.write(f"**Period 1:** {start_date_1} to {end_date_1}")
                         st.write(f"**Period 2:** {start_date_2} to {end_date_2}")
                         st.write(f"**Month:** {get_month_name(month)}")

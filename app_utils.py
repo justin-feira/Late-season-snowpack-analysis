@@ -114,9 +114,8 @@ def validate_parameters(
     if not valid:
         return False, f"Period 2: {msg}"
     
-    # Check that periods don't overlap (optional but recommended)
-    if start_date_2 < end_date_1:
-        return False, "Warning: Period 2 starts before Period 1 ends. Consider non-overlapping periods for clearer comparison."
+    # Note: Overlapping periods are allowed but not recommended for clearest comparison
+    # Users can still proceed if they want to compare overlapping time ranges
     
     # Validate month
     if not 1 <= month <= 12:

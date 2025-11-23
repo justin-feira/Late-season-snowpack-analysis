@@ -72,35 +72,32 @@ def check_gee_auth():
     try:
         import ee
         try:
-            # Try with a timeout to avoid hanging
-            import signal
+            # Try with a timeout to avoid hanging (cross-platform approach)
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
             
-            def timeout_handler(signum, frame):
-                raise TimeoutError("GEE initialization timed out")
-            
-            # Set a 5-second timeout
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(5)
-            
-            try:
+            def try_initialize():
                 ee.Initialize()
-                signal.alarm(0)  # Cancel the alarm
-                print("✅ Google Earth Engine - Authenticated and ready")
                 return True
-            except TimeoutError:
-                signal.alarm(0)
-                print("⚠️  Google Earth Engine - Authentication check timed out")
-                print("\nThe app will handle authentication when started.")
-                return False
-            except Exception as e:
-                signal.alarm(0)
-                print("⚠️  Google Earth Engine - Not authenticated")
-                print("\nTo authenticate, run:")
-                print("    earthengine authenticate")
-                print("\nOr in Python:")
-                print("    python -c 'import ee; ee.Authenticate()'")
-                print("\nThe app will prompt for authentication when started.")
-                return False
+            
+            # Try to initialize with a 5-second timeout
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(try_initialize)
+                try:
+                    future.result(timeout=5)
+                    print("✅ Google Earth Engine - Authenticated and ready")
+                    return True
+                except FutureTimeoutError:
+                    print("⚠️  Google Earth Engine - Authentication check timed out")
+                    print("\nThe app will handle authentication when started.")
+                    return False
+                except Exception as e:
+                    print("⚠️  Google Earth Engine - Not authenticated")
+                    print("\nTo authenticate, run:")
+                    print("    earthengine authenticate")
+                    print("\nOr in Python:")
+                    print("    python -c 'import ee; ee.Authenticate()'")
+                    print("\nThe app will prompt for authentication when started.")
+                    return False
         except Exception as e:
             print(f"⚠️  Google Earth Engine - {str(e)}")
             return False
