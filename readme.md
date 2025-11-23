@@ -54,6 +54,29 @@ The output map is automatically saved as `snow_difference_analysis.html` for off
 - ✅ **Visual results** with layer toggles
 - ✅ **Interpretation guide** built into the app
 
+### Troubleshooting
+
+**Error: "Google Earth Engine not initialized"**
+- Make sure you've authenticated with GEE: `earthengine authenticate`
+- Follow the prompts and sign in with your Google account
+- If authentication fails, try: `python -c "import ee; ee.Authenticate()"`
+
+**Error: "Module not found"**
+- Ensure all dependencies are installed: `pip install -r requirements.txt`
+- Try upgrading pip: `pip install --upgrade pip`
+
+**Map not displaying**
+- Check your internet connection (required for map tiles)
+- Try refreshing the browser page
+- Check the browser console for JavaScript errors
+
+**Analysis taking too long**
+- Try reducing the time range or polygon size
+- Increase the cloud cover threshold to get more images
+- Check your internet connection speed
+
+For more help, please open an issue on the GitHub repository.
+
 ---
 
 ## 📚 Python API (Advanced Usage)
@@ -153,3 +176,27 @@ Where:
 - **NDSI < 0.0**: Bare ground, vegetation, or water
 
 Snow has high reflectance in the visible spectrum but low reflectance in the short-wave infrared, making this ratio effective for snow detection.
+
+## Testing
+
+The repository includes unit tests for the app utilities:
+
+```bash
+# Run tests
+python -m unittest test_app_utils.py -v
+```
+
+Tests cover:
+- Date range validation
+- Parameter validation
+- GeoJSON to Earth Engine geometry conversion
+- Landsat collection suggestions
+- Date formatting
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is open source. Please check the repository for license details.
