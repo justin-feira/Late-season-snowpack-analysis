@@ -100,3 +100,53 @@ def count_images_by_week(collection, year):
     weeks = ee.List.sequence(0, 51)
     counts = weeks.map(week_count)
     return ee.FeatureCollection(counts)
+
+
+
+def yearly_composite(year, collection=collection):
+    year_images = collection.filter(ee.Filter.calendarRange(year, year, 'year'))
+    count = year_images.size()
+    composite = year_images.mean()
+    print(f"Year: {year}, Image Count: {count.getInfo()}")
+    return composite.set('year', year).set('image_count', count)
+
+def create_weighted_average(collection) -> ee.Image:
+    years = collection.aggregate_array('system:time_start') \
+    .map(lambda date: ee.Date(date) \
+    .get('year')).distinct().sort()
+
+    ## list of yearly_composite objects
+    yearly_composites = []
+    for year in years.getInfo():
+        yearly_composites.append(yearly_composite(year, collection))
+
+    ## convert list back into image collection
+    composite_collection = ee.ImageCollection.fromImages(yearly_composites)
+
+    ## average the yearly composites
+    return composite_collection.mean()
+    
+
+def add_ee_layer(folium_map, ee_image, vis_params, name, show=True):
+    """
+    Add an Earth Engine image to a Folium map
+    
+    Args:
+        folium_map: Folium map object
+        ee_image: Earth Engine image
+        vis_params: Visualization parameters dict
+        name: Layer name for the map
+        show: Whether layer is visible by default
+    """
+    map_id_dict = ee_image.getMapId(vis_params)
+    folium.raster_layers.TileLayer(
+        tiles=map_id_dict['tile_fetcher'].url_format,
+        attr='Google Earth Engine',
+        name=name,
+        overlay=True,
+        control=True,
+        show=show
+    ).add_to(folium_map)
+    
+    return folium_map
+
