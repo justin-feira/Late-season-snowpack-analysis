@@ -24,13 +24,14 @@ from geolib import (
     add_ee_layer
 )
 
-def snow_difference_map(date_range_1=ee.DateRange('1990-01-01', '2000-01-01'), date_range_2=ee.DateRange('2015-01-01', '2025-01-01'), 
-                        region_polygon, 
+def snow_difference_map(region_polygon, 
+                        date_range_1=ee.DateRange('1990-01-01', '2000-01-01'), 
+                        date_range_2=ee.DateRange('2015-01-01', '2025-01-01'), 
                         collection_1='LANDSAT/LT05/C02/T1_L2', 
                         collection_2='LANDSAT/LC08/C02/T1_L2',
                         month_int=6,
                         cloud_cover=10,
-                        nsdi_vis= {
+                        ndsi_vis= {
                             'min': -0.5,
                             'max': 1.0,
                             'palette': ['red', 'yellow', 'green', 'blue', 'purple']
@@ -66,8 +67,8 @@ def snow_difference_map(date_range_1=ee.DateRange('1990-01-01', '2000-01-01'), d
     collection_b_ndsi = collection_b.map(mask_clouds_landsat).map(ndsi_l9)
 
     # calculate yearly weighted average with all available data
-    weighted_avg_a = create_weighted_average(collection_a_ndsi, 'snow_cover')
-    weighted_avg_b = create_weighted_average(collection_b_ndsi, 'snow_cover')
+    weighted_avg_a = create_weighted_average(collection_a_ndsi)
+    weighted_avg_b = create_weighted_average(collection_b_ndsi)
 
     # calculate difference
     difference_image = weighted_avg_b.select('NDSI').subtract(weighted_avg_a.select('NDSI')).rename('NDSI_Difference')
@@ -77,11 +78,14 @@ def snow_difference_map(date_range_1=ee.DateRange('1990-01-01', '2000-01-01'), d
     m = folium.Map(location=polygon_center, zoom_start=8)
 
     # add layers to map
-    add_ee_layer(m, weighted_avg_a.select('NDSI'), nsdi_vis, f'NDSI {date_range_1.getInfo()} average')
-    add_ee_layer(m, weighted_avg_b.select('NDSI'), nsdi_vis, f'NDSI {date_range_2.getInfo()} average')
+    add_ee_layer(m, weighted_avg_a.select('NDSI'), ndsi_vis, f'NDSI Early Period Average')
+    add_ee_layer(m, weighted_avg_b.select('NDSI'), ndsi_vis, f'NDSI Recent Period Average')
     add_ee_layer(m, difference_image, diff_vis, 'NDSI Difference (Recent - Early)')
 
+    # Add layer control and save map
+    folium.LayerControl().add_to(m)
+    m.save('snow_difference_analysis.html')
+    print("✅ Interactive map saved as 'snow_difference_analysis.html'")
+    
     return m
-    
 
-    
