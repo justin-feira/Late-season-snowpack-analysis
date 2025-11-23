@@ -2,6 +2,87 @@
 
 This repository provides the function `snow_difference_map`, which allows users to analyze changes in snow cover within a given polygon between two time periods using Landsat satellite data.
 
+## 🎯 Interactive Web App (New!)
+
+We now provide an easy-to-use **Streamlit web app** that wraps the snow difference functionality with an interactive map interface. **No coding required!**
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/justin-feira/Late-season-snowpack-analysis.git
+   cd Late-season-snowpack-analysis
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Authenticate with Google Earth Engine:**
+   ```bash
+   earthengine authenticate
+   ```
+   Follow the prompts to authenticate your GEE account.
+
+### Running the App
+
+Start the Streamlit app with:
+```bash
+streamlit run app.py
+```
+
+The app will open in your browser at `http://localhost:8501`.
+
+### Using the App
+
+1. **Draw Your Region:** Use the polygon drawing tool (⬠) on the interactive map to define your area of interest
+2. **Set Time Periods:** Choose start and end dates for both historical and recent periods
+3. **Configure Parameters:** Adjust month filter, cloud cover threshold, and other settings
+4. **Run Analysis:** Click the "Run Snow Difference Analysis" button
+5. **View Results:** The app displays an interactive map with three layers showing snow changes
+
+The output map is automatically saved as `snow_difference_analysis.html` for offline viewing.
+
+### Features
+
+- ✅ **Interactive map** with polygon drawing
+- ✅ **Date pickers** for easy time period selection
+- ✅ **Real-time validation** of parameters
+- ✅ **Automatic Landsat collection selection** based on dates
+- ✅ **Clear error messages** and guidance
+- ✅ **Visual results** with layer toggles
+- ✅ **Interpretation guide** built into the app
+
+### Troubleshooting
+
+**Error: "Google Earth Engine not initialized"**
+- Make sure you've authenticated with GEE: `earthengine authenticate`
+- Follow the prompts and sign in with your Google account
+- If authentication fails, try: `python -c "import ee; ee.Authenticate()"`
+
+**Error: "Module not found"**
+- Ensure all dependencies are installed: `pip install -r requirements.txt`
+- Try upgrading pip: `pip install --upgrade pip`
+
+**Map not displaying**
+- Check your internet connection (required for map tiles)
+- Try refreshing the browser page
+- Check the browser console for JavaScript errors
+
+**Analysis taking too long**
+- Try reducing the time range or polygon size
+- Increase the cloud cover threshold to get more images
+- Check your internet connection speed
+
+For more help, please open an issue on the GitHub repository.
+
+---
+
+## 📚 Python API (Advanced Usage)
+
+For programmatic access or integration into notebooks, you can use the Python API directly:
+
 ## Quick Start
 
 ### Setup
@@ -95,3 +176,27 @@ Where:
 - **NDSI < 0.0**: Bare ground, vegetation, or water
 
 Snow has high reflectance in the visible spectrum but low reflectance in the short-wave infrared, making this ratio effective for snow detection.
+
+## Testing
+
+The repository includes unit tests for the app utilities:
+
+```bash
+# Run tests
+python -m unittest test_app_utils.py -v
+```
+
+Tests cover:
+- Date range validation
+- Parameter validation
+- GeoJSON to Earth Engine geometry conversion
+- Landsat collection suggestions
+- Date formatting
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is open source. Please check the repository for license details.

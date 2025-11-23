@@ -1,0 +1,18 @@
+# Core dependencies
+earthengine-api>=0.1.300
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Visualization
+folium>=0.14.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+
+# Streamlit app
+streamlit>=1.28.0
+leafmap>=0.28.0
+streamlit-folium>=0.15.0
+
+# Utilities
+geojson>=3.0.0
+shapely>=2.0.0
