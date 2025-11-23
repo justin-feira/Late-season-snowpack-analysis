@@ -7,6 +7,7 @@ import seaborn as sns
 from IPython.display import Image, display
 import json
 import sys
+import os
 sys.path.append('../Setup')  # Go up one level to reach Setup folder
 from gee_setup import *
 setup_gee()
@@ -32,6 +33,9 @@ def snow_difference_map(region_polygon,
                         month_int=6,
                         cloud_cover=10,
                         clip_to_region=False,
+                        output_folder='outputs',
+                        output_filename='snow_difference_analysis',
+                        output_format='html',
                         ndsi_vis= {
                             'min': -0.5,
                             'max': 1.0,
@@ -59,6 +63,9 @@ def snow_difference_map(region_polygon,
     month_int = 6,                                    # Month filter (1-12)
     cloud_cover = 10,                                 # Max cloud % (0-100)
     clip_to_region = False,                           # Clip to polygon bounds
+    output_folder = 'outputs',                        # Output folder for map file
+    output_filename = 'snow_difference_analysis',     # Output filename (no extension)
+    output_format = 'html',                           # Output format ('html', 'png', 'jpg')
     ndsi_vis = {...},                                 # NDSI visualization
     snow_vis = {...},                                 # Binary snow visualization  
     diff_vis = {...}                                  # Difference visualization
@@ -94,7 +101,6 @@ def snow_difference_map(region_polygon,
         weighted_avg_a = weighted_avg_a.clip(region_polygon)
         weighted_avg_b = weighted_avg_b.clip(region_polygon)
         difference_image = difference_image.clip(region_polygon)
-        print("🔲 Images clipped to polygon bounds")
 
     # create folium map
     polygon_center = region_polygon.centroid().coordinates().getInfo()[::-1]  # reverse for folium
@@ -105,10 +111,51 @@ def snow_difference_map(region_polygon,
     add_ee_layer(m, weighted_avg_b.select('NDSI'), ndsi_vis, f'NDSI Recent Period Average')
     add_ee_layer(m, difference_image, diff_vis, 'NDSI Difference (Recent - Early)')
 
-    # Add layer control and save map
+    # Create output folder if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    
+    # Add layer control
     folium.LayerControl().add_to(m)
-    m.save('snow_difference_analysis.html')
-    print("✅ Interactive map saved as 'snow_difference_analysis.html'")
+    
+    # Create output path with specified filename and format
+    output_path = os.path.join(output_folder, f"{output_filename}.{output_format}")
+    
+    # Save map based on output format
+    if output_format.lower() == 'html':
+        m.save(output_path)
+    elif output_format.lower() in ['png', 'jpg', 'jpeg']:
+        # For image formats, we need to use a different approach
+        try:
+            import io
+            import base64
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            
+            # Save as HTML first for screenshot
+            temp_html = os.path.join(output_folder, f"temp_{output_filename}.html")
+            m.save(temp_html)
+            
+            # Use selenium to take screenshot (requires chromedriver)
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.get(f"file://{os.path.abspath(temp_html)}")
+            driver.save_screenshot(output_path)
+            driver.quit()
+            
+            # Clean up temp file
+            os.remove(temp_html)
+            
+        except ImportError:
+            output_path = os.path.join(output_folder, f"{output_filename}.html")
+            m.save(output_path)
+        except Exception as e:
+            output_path = os.path.join(output_folder, f"{output_filename}.html")
+            m.save(output_path)
+    else:
+        output_path = os.path.join(output_folder, f"{output_filename}.html")
+        m.save(output_path)
     
     return m
 
