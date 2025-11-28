@@ -78,6 +78,7 @@ def snow_difference_map(region_polygon,
     .filterBounds(region_polygon) \
     .filter(ee.Filter.calendarRange(month_int, month_int, 'month')) \
     .filter(ee.Filter.lt('CLOUD_COVER', cloud_cover))
+    
     # landsat 9
     collection_b = ee.ImageCollection(collection_2) \
         .filterDate(date_range_2) \
@@ -85,16 +86,48 @@ def snow_difference_map(region_polygon,
     .filter(ee.Filter.calendarRange(month_int, month_int, 'month')) \
     .filter(ee.Filter.lt('CLOUD_COVER', cloud_cover))
 
+    # Check if collections have any images
+    size_a = collection_a.size()
+    size_b = collection_b.size()
+    
+    # Get actual counts to validate
+    count_a = size_a.getInfo()
+    count_b = size_b.getInfo()
+    
+    if count_a == 0:
+        raise ValueError(f"No images found for period 1 ({date_range_1.start().getInfo()['value']} to {date_range_1.end().getInfo()['value']}) with current filters. Try increasing cloud cover threshold or expanding date range.")
+    
+    if count_b == 0:
+        raise ValueError(f"No images found for period 2 ({date_range_2.start().getInfo()['value']} to {date_range_2.end().getInfo()['value']}) with current filters. Try increasing cloud cover threshold or expanding date range.")
+    
+    print(f"Found {count_a} images for period 1 and {count_b} images for period 2")
+
     # apply cloud mask and NDSI calculation
     collection_a_ndsi = collection_a.map(mask_clouds_landsat).map(ndsi_l5)
     collection_b_ndsi = collection_b.map(mask_clouds_landsat).map(ndsi_l9)
 
     # calculate yearly weighted average with all available data
-    weighted_avg_a = create_weighted_average(collection_a_ndsi)
-    weighted_avg_b = create_weighted_average(collection_b_ndsi)
+    try:
+        weighted_avg_a = create_weighted_average(collection_a_ndsi)
+        weighted_avg_b = create_weighted_average(collection_b_ndsi)
+        
+        # Validate that the averages have the NDSI band
+        bands_a = weighted_avg_a.bandNames().getInfo()
+        bands_b = weighted_avg_b.bandNames().getInfo()
+        
+        if 'NDSI' not in bands_a:
+            raise ValueError(f"Period 1 average image missing NDSI band. Available bands: {bands_a}")
+        if 'NDSI' not in bands_b:
+            raise ValueError(f"Period 2 average image missing NDSI band. Available bands: {bands_b}")
+            
+    except Exception as e:
+        raise ValueError(f"Error creating weighted averages: {str(e)}")
 
-    # calculate difference
-    difference_image = weighted_avg_b.select('NDSI').subtract(weighted_avg_a.select('NDSI')).rename('NDSI_Difference')
+    # calculate difference with error handling
+    try:
+        difference_image = weighted_avg_b.select('NDSI').subtract(weighted_avg_a.select('NDSI')).rename('NDSI_Difference')
+    except Exception as e:
+        raise ValueError(f"Error calculating NDSI difference: {str(e)}")
 
     # clip images to region if requested
     if clip_to_region:
@@ -102,9 +135,36 @@ def snow_difference_map(region_polygon,
         weighted_avg_b = weighted_avg_b.clip(region_polygon)
         difference_image = difference_image.clip(region_polygon)
 
-    # create folium map
-    polygon_center = region_polygon.centroid().coordinates().getInfo()[::-1]  # reverse for folium
-    m = folium.Map(location=polygon_center, zoom_start=8)
+    # create folium map with error handling for large polygons
+    try:
+        polygon_center = region_polygon.centroid().coordinates().getInfo()[::-1]  # reverse for folium
+    except Exception as e:
+        # Fallback for very large polygons that might timeout
+        print(f"Warning: Could not compute polygon centroid, using default center: {str(e)}")
+        polygon_center = [40, -100]  # Default center
+    
+    # Adjust zoom based on polygon size
+    try:
+        bounds = region_polygon.bounds().getInfo()
+        coords = bounds['coordinates'][0]
+        lat_range = abs(coords[2][1] - coords[0][1])
+        lon_range = abs(coords[1][0] - coords[0][0])
+        max_range = max(lat_range, lon_range)
+        
+        if max_range > 100:  # Very large area
+            zoom_start = 2
+        elif max_range > 50:  # Large area
+            zoom_start = 3
+        elif max_range > 20:  # Medium area
+            zoom_start = 4
+        elif max_range > 5:   # Small-medium area
+            zoom_start = 6
+        else:                 # Small area
+            zoom_start = 8
+    except:
+        zoom_start = 2  # Safe default for large areas
+    
+    m = folium.Map(location=polygon_center, zoom_start=zoom_start)
 
     # add layers to map
     add_ee_layer(m, weighted_avg_a.select('NDSI'), ndsi_vis, f'NDSI Early Period Average')
