@@ -85,16 +85,18 @@ snow_map = snow_difference_map(
 | `output_folder` | `outputs` | Output folder for map file |
 | `output_filename` | `snow_difference_analysis` | Output filename without extension |
 | `output_format` | `tiff` | Output format (tiff, png, jpg, html) |
+| `export_by_layer` | `True` | Export each analysis layer as separate file |
 
 ## Output
 
 The function creates high-quality analysis outputs in multiple formats:
 
-### Static Images (Default: TIFF)
-- **Three-panel visualization** showing historical, recent, and difference maps
-- **High resolution** (300 DPI) suitable for publications
-- **Geographic coordinates** and region boundaries
-- **Formats available**: TIFF (uncompressed), PNG, JPG
+### Static Images (Default: TIFF with Layer Export)
+- **Individual layer files** for each analysis component (historical, recent, difference)
+- **Geospatial format** with proper coordinate reference system (Web Mercator EPSG:3857)
+- **Adaptive resolution** based on region size (250m-1km pixel size)
+- **Direct Earth Engine export** preserving original data quality
+- **Formats available**: TIFF (georeferenced), PNG, JPG
 
 ### Interactive Maps (HTML)
 - **Folium-based** interactive web maps with layer controls
