@@ -84,17 +84,29 @@ snow_map = snow_difference_map(
 | `clip_to_region` | `False` | Clip output images to polygon bounds |
 | `output_folder` | `outputs` | Output folder for map file |
 | `output_filename` | `snow_difference_analysis` | Output filename without extension |
-| `output_format` | `html` | Output format (html, png, jpg) |
+| `output_format` | `tiff` | Output format (tiff, png, jpg, html) |
 
 ## Output
 
-The function returns an interactive Folium map with three layers:
+The function creates high-quality analysis outputs in multiple formats:
 
+### Static Images (Default: TIFF)
+- **Three-panel visualization** showing historical, recent, and difference maps
+- **High resolution** (300 DPI) suitable for publications
+- **Geographic coordinates** and region boundaries
+- **Formats available**: TIFF (uncompressed), PNG, JPG
+
+### Interactive Maps (HTML)
+- **Folium-based** interactive web maps with layer controls
+- **Three toggleable layers**: Historical NDSI, Recent NDSI, NDSI Difference
+- **Zoom and pan** capabilities for detailed exploration
+
+### Data Interpretation
 - **Historical NDSI Average** - Snow conditions from the earlier period
 - **Recent NDSI Average** - Snow conditions from the later period  
 - **NDSI Difference** - Change detection (red = snow increase, blue = snow decrease)
 
-Maps are automatically saved to the specified output folder for offline viewing and sharing.
+All outputs are automatically saved to the specified output folder with persistent file formats.
 
 ## NDSI Explanation
 

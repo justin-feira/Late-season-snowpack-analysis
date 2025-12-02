@@ -8,6 +8,12 @@ from IPython.display import Image, display
 import json
 import sys
 import os
+
+def get_month_name(month_int):
+    """Convert month number to month name."""
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return months[month_int - 1] if 1 <= month_int <= 12 else 'Unknown'
 sys.path.append('../Setup')  # Go up one level to reach Setup folder
 from gee_setup import *
 setup_gee()
@@ -35,7 +41,7 @@ def snow_difference_map(region_polygon,
                         clip_to_region=False,
                         output_folder='outputs',
                         output_filename='snow_difference_analysis',
-                        output_format='html',
+                        output_format='tiff',
                         ndsi_vis= {
                             'min': -0.5,
                             'max': 1.0,
@@ -65,7 +71,7 @@ def snow_difference_map(region_polygon,
     clip_to_region = False,                           # Clip to polygon bounds
     output_folder = 'outputs',                        # Output folder for map file
     output_filename = 'snow_difference_analysis',     # Output filename (no extension)
-    output_format = 'html',                           # Output format ('html', 'png', 'jpg')
+    output_format = 'tiff',                           # Output format ('tiff', 'png', 'jpg', 'html')
     ndsi_vis = {...},                                 # NDSI visualization
     snow_vis = {...},                                 # Binary snow visualization  
     diff_vis = {...}                                  # Difference visualization
@@ -184,38 +190,123 @@ def snow_difference_map(region_polygon,
     # Save map based on output format
     if output_format.lower() == 'html':
         m.save(output_path)
-    elif output_format.lower() in ['png', 'jpg', 'jpeg']:
-        # For image formats, we need to use a different approach
+        print(f"Saved interactive HTML map: {output_path}")
+    elif output_format.lower() in ['png', 'jpg', 'jpeg', 'tiff']:
+        # Create static image using matplotlib
         try:
-            import io
-            import base64
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import Options
+            import matplotlib.pyplot as plt
+            import numpy as np
+            from matplotlib.colors import ListedColormap, Normalize
+            from matplotlib.patches import Polygon as mpl_Polygon
             
-            # Save as HTML first for screenshot
-            temp_html = os.path.join(output_folder, f"temp_{output_filename}.html")
-            m.save(temp_html)
+            # Get region bounds for plotting
+            bounds = region_polygon.bounds().getInfo()
+            coords = bounds['coordinates'][0]
+            min_lon, min_lat = coords[0]
+            max_lon, max_lat = coords[2]
             
-            # Use selenium to take screenshot (requires chromedriver)
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            driver = webdriver.Chrome(options=chrome_options)
-            driver.get(f"file://{os.path.abspath(temp_html)}")
-            driver.save_screenshot(output_path)
-            driver.quit()
+            # Create figure with subplots
+            fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+            fig.suptitle(f'Snow Difference Analysis - {get_month_name(month_int)}', fontsize=16)
             
-            # Clean up temp file
-            os.remove(temp_html)
+            # Define extent for all plots
+            extent = [min_lon, max_lon, min_lat, max_lat]
             
-        except ImportError:
+            # Get thumbnail images from Earth Engine
+            try:
+                # Period 1 NDSI
+                ndsi1_url = weighted_avg_a.select('NDSI').getThumbUrl({
+                    'min': ndsi_vis['min'], 'max': ndsi_vis['max'],
+                    'palette': ndsi_vis['palette'],
+                    'region': region_polygon,
+                    'dimensions': 512
+                })
+                
+                # Period 2 NDSI  
+                ndsi2_url = weighted_avg_b.select('NDSI').getThumbUrl({
+                    'min': ndsi_vis['min'], 'max': ndsi_vis['max'],
+                    'palette': ndsi_vis['palette'],
+                    'region': region_polygon,
+                    'dimensions': 512
+                })
+                
+                # Difference
+                diff_url = difference_image.getThumbUrl({
+                    'min': diff_vis['min'], 'max': diff_vis['max'],
+                    'palette': diff_vis['palette'],
+                    'region': region_polygon,
+                    'dimensions': 512
+                })
+                
+                # Download and display images
+                import requests
+                from PIL import Image
+                
+                # Get images
+                img1 = Image.open(requests.get(ndsi1_url, stream=True).raw)
+                img2 = Image.open(requests.get(ndsi2_url, stream=True).raw)
+                img3 = Image.open(requests.get(diff_url, stream=True).raw)
+                
+                # Plot images
+                axes[0].imshow(img1, extent=extent)
+                axes[0].set_title('Historical NDSI Average')
+                axes[0].set_xlabel('Longitude')
+                axes[0].set_ylabel('Latitude')
+                
+                axes[1].imshow(img2, extent=extent)
+                axes[1].set_title('Recent NDSI Average')
+                axes[1].set_xlabel('Longitude')
+                axes[1].set_ylabel('')
+                
+                axes[2].imshow(img3, extent=extent)
+                axes[2].set_title('NDSI Difference (Recent - Historical)')
+                axes[2].set_xlabel('Longitude')
+                axes[2].set_ylabel('')
+                
+                # Add region outline to all plots
+                region_coords = region_polygon.coordinates().getInfo()[0]
+                for ax in axes:
+                    polygon = mpl_Polygon(region_coords, fill=False, edgecolor='red', linewidth=2)
+                    ax.add_patch(polygon)
+                    ax.grid(True, alpha=0.3)
+                
+                plt.tight_layout()
+                
+                # Save with specified format
+                if output_format.lower() == 'tiff':
+                    plt.savefig(output_path, format='tiff', dpi=300, bbox_inches='tight')
+                else:
+                    plt.savefig(output_path, format=output_format.lower(), dpi=300, bbox_inches='tight')
+                
+                plt.close()
+                print(f"Saved static image: {output_path}")
+                
+            except Exception as thumb_error:
+                print(f"Earth Engine thumbnail export failed: {thumb_error}")
+                # Fallback: save as HTML
+                output_path = os.path.join(output_folder, f"{output_filename}.html")
+                m.save(output_path)
+                print(f"Fallback: Saved as HTML instead: {output_path}")
+                
+        except ImportError as e:
+            print(f"Missing dependencies for image export: {e}")
+            print("Installing: pip install matplotlib pillow requests")
+            # Fallback to HTML
             output_path = os.path.join(output_folder, f"{output_filename}.html")
             m.save(output_path)
+            print(f"Fallback: Saved as HTML: {output_path}")
+            
         except Exception as e:
+            print(f"Error creating static image: {e}")
+            # Fallback to HTML
             output_path = os.path.join(output_folder, f"{output_filename}.html")
             m.save(output_path)
+            print(f"Fallback: Saved as HTML: {output_path}")
     else:
+        # Default to HTML for unsupported formats
         output_path = os.path.join(output_folder, f"{output_filename}.html")
         m.save(output_path)
+        print(f"Unsupported format, saved as HTML: {output_path}")
     
     return m
 
