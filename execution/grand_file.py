@@ -1,32 +1,20 @@
 import ee
 import folium
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from IPython.display import Image, display
-import json
-import sys
 import os
+import sys
+import requests
 
-def get_month_name(month_int):
-    """Convert month number to month name."""
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    return months[month_int - 1] if 1 <= month_int <= 12 else 'Unknown'
-sys.path.append('../Setup')  # Go up one level to reach Setup folder
+# Setup Earth Engine
+sys.path.append('../Setup')
 from gee_setup import *
 setup_gee()
 
+# Import analysis functions
 sys.path.append('../functions')
 from geolib import (
-    count_images_by_year, 
-    image_count, 
-    count_images_by_week,
     mask_clouds_landsat,
     ndsi_l5,
     ndsi_l9,
-    yearly_composite,
     create_weighted_average,
     add_ee_layer
 )
@@ -113,39 +101,57 @@ def snow_difference_map(region_polygon,
     # Define spatial reference (Web Mercator for consistency)
     crs = 'EPSG:3857'
     
-    # Calculate region bounds for adaptive resolution
+    # Calculate area to determine optimal export resolution
     bounds = region_polygon.bounds().getInfo()
     coords = bounds['coordinates'][0]
     lat_range = abs(coords[2][1] - coords[0][1])
     lon_range = abs(coords[1][0] - coords[0][0])
-    max_range = max(lat_range, lon_range)
-    
-    # Calculate area in square degrees (rough approximation)
     area_sq_deg = lat_range * lon_range
     
-    # Adaptive resolution based on area size to avoid 50MB limit
-    if area_sq_deg > 25:  # Very large area
-        scale = 500  # 500m resolution
-        max_pixels = 1e7
-        print(f"Large area detected ({area_sq_deg:.1f} sq deg), using {scale}m resolution")
-    elif area_sq_deg > 10:  # Large area
-        scale = 250  # 250m resolution
-        max_pixels = 5e7
-        print(f"Medium area detected ({area_sq_deg:.1f} sq deg), using {scale}m resolution")
-    elif area_sq_deg > 1:  # Medium area
-        scale = 120  # 120m resolution
-        max_pixels = 1e8
-        print(f"Small-medium area detected ({area_sq_deg:.1f} sq deg), using {scale}m resolution")
-    else:  # Small area
-        scale = 30   # Native Landsat resolution
-        max_pixels = 1e9
-        print(f"Small area detected ({area_sq_deg:.1f} sq deg), using native {scale}m resolution")
+    # Set resolution based on area size (avoids 50MB export limit)
+    if area_sq_deg > 25:
+        scale, max_pixels = 500, int(1e7)
+    elif area_sq_deg > 10:
+        scale, max_pixels = 250, int(5e7)
+    elif area_sq_deg > 1:
+        scale, max_pixels = 120, int(1e8)
+    else:
+        scale, max_pixels = 30, int(1e9)
+    
+    print(f"Area: {area_sq_deg:.1f} sq deg, Resolution: {scale}m")
 
-    # Export individual layers with spatial reference
-    # Note: 50MB limit only applies to direct file exports (TIFF/PNG/JPG), not HTML maps
+    def export_image(image, filepath, scale, max_pixels, visualize=False, vis_params=None):
+        """Export a single image with error handling and fallback resolution."""
+        try:
+            if visualize and vis_params:
+                export_image = image.visualize(**vis_params)
+            else:
+                export_image = image
+            
+            url = export_image.getDownloadURL({
+                'region': region_polygon,
+                'scale': scale,
+                'crs': crs,
+                'format': 'GeoTIFF' if filepath.endswith('.tiff') else output_format.upper(),
+                'maxPixels': max_pixels
+            })
+            
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            with open(filepath, 'wb') as f:
+                f.write(response.content)
+            
+            return True, scale
+            
+        except Exception as e:
+            if "must be less than or equal to" in str(e) and scale < 1000:
+                # Retry with double resolution
+                return export_image(image, filepath, scale * 2, max_pixels // 4, visualize, vis_params)
+            return False, str(e)
+    
+    # Export individual layers (50MB limit applies to direct exports only, not HTML maps)
     if export_by_layer and output_format.lower() in ['tiff', 'png', 'jpg']:
-        import requests
-        
         layers = [
             (weighted_avg_a.select('NDSI'), f"{output_filename}_historical", ndsi_vis),
             (weighted_avg_b.select('NDSI'), f"{output_filename}_recent", ndsi_vis),
@@ -153,93 +159,60 @@ def snow_difference_map(region_polygon,
         ]
         
         for image, name, vis_params in layers:
-            export_path = os.path.join(output_folder, f"{name}.{output_format}")
-            
-            # Apply visualization parameters to the image before export
             if output_format.lower() == 'tiff':
-                # For TIFF, apply visualization parameters for colored output
-                export_image = image.visualize(**vis_params)
-            else:
-                # For PNG/JPG, also apply visualization
-                export_image = image.visualize(**vis_params)
+                # Create output folders
+                raw_folder = os.path.join(output_folder, 'raw_data')
+                vis_folder = os.path.join(output_folder, 'visualized')
+                os.makedirs(raw_folder, exist_ok=True)
+                os.makedirs(vis_folder, exist_ok=True)
+                
+                # Export raw data (actual NDSI values)
+                raw_path = os.path.join(raw_folder, f"{name}_raw.tiff")
+                success, result = export_image(image, raw_path, scale, max_pixels)
+                if success:
+                    print(f"Raw data exported: {raw_path} ({result}m)")
+                else:
+                    print(f"Raw export failed: {result}")
+                
+                # Export visualized data (RGB colored)
+                vis_path = os.path.join(vis_folder, f"{name}_visualized.tiff")
+                success, result = export_image(image, vis_path, scale, max_pixels, True, vis_params)
+                if success:
+                    print(f"Visualized exported: {vis_path} ({result}m)")
+                else:
+                    print(f"Visualized export failed: {result}")
             
-            try:
-                # Get download URL with adaptive resolution
-                url = export_image.getDownloadURL({
-                    'region': region_polygon,
-                    'scale': scale,
-                    'crs': crs,
-                    'format': 'GeoTIFF' if output_format.lower() == 'tiff' else output_format.upper(),
-                    'maxPixels': max_pixels
-                })
-                
-                # Download and save
-                response = requests.get(url)
-                response.raise_for_status()  # Raise exception for bad status codes
-                
-                with open(export_path, 'wb') as f:
-                    f.write(response.content)
-                
-                print(f"Exported: {export_path} (CRS: {crs}, Scale: {scale}m)")
-                
-            except Exception as e:
-                print(f"Export failed for {name}: {str(e)}")
-                if "must be less than or equal to" in str(e) and scale < 1000:
-                    # Try with lower resolution
-                    fallback_scale = scale * 2
-                    print(f"Retrying with {fallback_scale}m resolution...")
-                    try:
-                        url = export_image.getDownloadURL({
-                            'region': region_polygon,
-                            'scale': fallback_scale,
-                            'crs': crs,
-                            'format': 'GeoTIFF' if output_format.lower() == 'tiff' else output_format.upper(),
-                            'maxPixels': max_pixels // 4
-                        })
-                        
-                        response = requests.get(url)
-                        response.raise_for_status()
-                        
-                        with open(export_path, 'wb') as f:
-                            f.write(response.content)
-                        
-                        print(f"Exported (fallback): {export_path} (CRS: {crs}, Scale: {fallback_scale}m)")
-                        
-                    except Exception as e2:
-                        print(f"Fallback export also failed for {name}: {str(e2)}")
+            else:
+                # For PNG/JPG, export only visualized version
+                export_path = os.path.join(output_folder, f"{name}.{output_format}")
+                success, result = export_image(image, export_path, scale, max_pixels, True, vis_params)
+                if success:
+                    print(f"Exported: {export_path} ({result}m)")
+                else:
+                    print(f"Export failed: {result}")
     
-    # Create folium map
+    # Create interactive map (HTML maps have no size limits)
     try:
-        polygon_center = region_polygon.centroid().coordinates().getInfo()[::-1]
-        zoom_start = 8 if max_range < 5 else 6 if max_range < 20 else 4
+        center = region_polygon.centroid().coordinates().getInfo()[::-1]
+        zoom = 8 if area_sq_deg < 1 else 6 if area_sq_deg < 10 else 4
         
-        m = folium.Map(location=polygon_center, zoom_start=zoom_start)
+        m = folium.Map(location=center, zoom_start=zoom)
         
-        # HTML maps can handle any size data via tile service API (no 50MB limit)
-        # Always add all layers to the interactive map
+        # Add all layers to map
         add_ee_layer(m, weighted_avg_a.select('NDSI'), ndsi_vis, 'Historical NDSI')
         add_ee_layer(m, weighted_avg_b.select('NDSI'), ndsi_vis, 'Recent NDSI')
         add_ee_layer(m, difference_image, diff_vis, 'NDSI Difference')
         folium.LayerControl().add_to(m)
         
-        print(f"Interactive map created with all layers (area: {area_sq_deg:.1f} sq deg)")
-        
-        # Save HTML map if requested or as default with layer export
+        # Save HTML map
         if output_format.lower() == 'html' or export_by_layer:
             html_path = os.path.join(output_folder, f"{output_filename}.html")
             m.save(html_path)
-            print(f"Saved interactive map: {html_path}")
+            print(f"Interactive map saved: {html_path}")
         
         return m
     
     except Exception as e:
         print(f"Map creation failed: {str(e)}")
-        # Return a basic map centered on the region
-        try:
-            basic_center = region_polygon.centroid().coordinates().getInfo()[::-1]
-            basic_map = folium.Map(location=basic_center, zoom_start=6)
-            return basic_map
-        except:
-            # Fallback to a default map
-            return folium.Map(location=[0, 0], zoom_start=2)
+        return folium.Map(location=[0, 0], zoom_start=2)
 
