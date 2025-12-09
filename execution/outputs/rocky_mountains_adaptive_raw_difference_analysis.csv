@@ -1,0 +1,2 @@
+filename,mean,median,min_value,max_value,std_dev,total_pixels,snow pixels,snow_coverage_percentage,mean_difference,median_difference,mild snow loss pixels,severe snow loss pixels,total_loss_pixels,total_gain_pixels,percentage_snow_loss,percentage_severe_snow_loss
+Rocky_Mountains_Raw_Diff,-0.061462729909037284,-0.03869626,-1.0331779,0.8478584,0.08924747286249539,9206739,,,-0.061462729909037284,-0.03869626,1807056,229784,2036840,116526,22.123359856296567,2.495823982845609

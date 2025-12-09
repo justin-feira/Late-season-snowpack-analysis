@@ -120,15 +120,15 @@ def snow_difference_map(region_polygon,
     
     print(f"Area: {area_sq_deg:.1f} sq deg, Resolution: {scale}m")
 
-    def export_image(image, filepath, scale, max_pixels, visualize=False, vis_params=None):
+    def export_layer(ee_image, filepath, scale, max_pixels, visualize=False, vis_params=None):
         """Export a single image with error handling and fallback resolution."""
         try:
             if visualize and vis_params:
-                export_image = image.visualize(**vis_params)
+                processed_image = ee_image.visualize(**vis_params)
             else:
-                export_image = image
+                processed_image = ee_image
             
-            url = export_image.getDownloadURL({
+            url = processed_image.getDownloadURL({
                 'region': region_polygon,
                 'scale': scale,
                 'crs': crs,
@@ -146,8 +146,7 @@ def snow_difference_map(region_polygon,
             
         except Exception as e:
             if "must be less than or equal to" in str(e) and scale < 1000:
-                # Retry with double resolution
-                return export_image(image, filepath, scale * 2, max_pixels // 4, visualize, vis_params)
+                return export_layer(ee_image, filepath, scale * 2, max_pixels // 4, visualize, vis_params)
             return False, str(e)
     
     # Export individual layers (50MB limit applies to direct exports only, not HTML maps)
@@ -158,7 +157,7 @@ def snow_difference_map(region_polygon,
             (difference_image, f"{output_filename}_difference", diff_vis)
         ]
         
-        for image, name, vis_params in layers:
+        for ee_image, name, vis_params in layers:
             if output_format.lower() == 'tiff':
                 # Create output folders
                 raw_folder = os.path.join(output_folder, 'raw_data')
@@ -168,7 +167,7 @@ def snow_difference_map(region_polygon,
                 
                 # Export raw data (actual NDSI values)
                 raw_path = os.path.join(raw_folder, f"{name}_raw.tiff")
-                success, result = export_image(image, raw_path, scale, max_pixels)
+                success, result = export_layer(ee_image, raw_path, scale, max_pixels)
                 if success:
                     print(f"Raw data exported: {raw_path} ({result}m)")
                 else:
@@ -176,7 +175,7 @@ def snow_difference_map(region_polygon,
                 
                 # Export visualized data (RGB colored)
                 vis_path = os.path.join(vis_folder, f"{name}_visualized.tiff")
-                success, result = export_image(image, vis_path, scale, max_pixels, True, vis_params)
+                success, result = export_layer(ee_image, vis_path, scale, max_pixels, True, vis_params)
                 if success:
                     print(f"Visualized exported: {vis_path} ({result}m)")
                 else:
@@ -185,7 +184,7 @@ def snow_difference_map(region_polygon,
             else:
                 # For PNG/JPG, export only visualized version
                 export_path = os.path.join(output_folder, f"{name}.{output_format}")
-                success, result = export_image(image, export_path, scale, max_pixels, True, vis_params)
+                success, result = export_layer(ee_image, export_path, scale, max_pixels, True, vis_params)
                 if success:
                     print(f"Exported: {export_path} ({result}m)")
                 else:
