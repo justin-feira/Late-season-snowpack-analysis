@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snowpack Analysis Tool</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Draw CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 360px;
+            background: #16213e;
+            padding: 24px;
+            overflow-y: auto;
+            border-right: 1px solid #0f3460;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .logo h1 {
+            font-size: 1.5rem;
+            color: #e94560;
+            margin-bottom: 4px;
+        }
+        
+        .logo p {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        
+        .section {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .section-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #e94560;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: #e94560;
+            border-radius: 2px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #16213e;
+            color: #eee;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        
+        .date-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #e94560;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560, #c73659);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: #0f3460;
+            color: #eee;
+            margin-top: 10px;
+        }
+        
+        .btn-secondary:hover {
+            background: #1a4a7a;
+        }
+        
+        /* Map Container */
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        /* Status Badge */
+        .status-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #16213e;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ffc107;
+        }
+        
+        .status-dot.ready {
+            background: #4caf50;
+        }
+        
+        /* Coordinate Display */
+        .coord-display {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 12px;
+            padding: 10px;
+            background: #0d1b2a;
+            border-radius: 6px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #16213e;
+            padding: 16px 28px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 2000;
+            display: none;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .toast.error {
+            border-left-color: #f44336;
+        }
+        
+        .toast.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translate(-50%, 20px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+        
+        /* Instructions */
+        .instructions {
+            font-size: 0.85rem;
+            color: #888;
+            line-height: 1.6;
+            padding: 12px;
+            background: #0d1b2a;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+        
+        .instructions strong {
+            color: #e94560;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">
+                <h1>❄️ Snowpack Analysis</h1>
+                <p>Late Season Snow Coverage Tool</p>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Region Selection</div>
+                <div class="instructions">
+                    <strong>Draw a polygon</strong> on the map to define your study area. 
+                    Use the polygon tool in the top-left corner of the map.
+                </div>
+                <div class="coord-display" id="coordDisplay">
+                    No polygon drawn yet
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Historical Period</div>
+                <div class="date-range">
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" id="historicalStart" value="1990-01-01">
+                    </div>
+                    <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date" id="historicalEnd" value="2000-01-01">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Recent Period</div>
+                <div class="date-range">
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" id="recentStart" value="2015-01-01">
+                    </div>
+                    <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date" id="recentEnd" value="2025-01-01">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Analysis Parameters</div>
+                
+                <div class="form-group">
+                    <label>Analysis Month</label>
+                    <select id="month">
+                        <option value="1">January</option>
+                        <option value="2">February</option>
+                        <option value="3">March</option>
+                        <option value="4">April</option>
+                        <option value="5">May</option>
+                        <option value="6" selected>June</option>
+                        <option value="7">July</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">October</option>
+                        <option value="11">November</option>
+                        <option value="12">December</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Max Cloud Cover (%)</label>
+                    <input type="number" id="cloudCover" value="10" min="0" max="100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Output Filename</label>
+                    <input type="text" id="outputName" value="snow_analysis" placeholder="Enter filename">
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="clipToRegion">
+                        <label for="clipToRegion" style="margin: 0;">Clip output to region</label>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" id="analyzeBtn" disabled>
+                Run Analysis
+            </button>
+            <button class="btn btn-secondary" id="clearBtn">
+                Clear Polygon
+            </button>
+        </div>
+        
+        <!-- Map -->
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="status-badge">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Draw a polygon to begin</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Draw JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    
+    <script>
+        // Initialize map centered on Rocky Mountains
+        const map = L.map('map').setView([40.0, -105.5], 6);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Add satellite layer option
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri'
+        });
+        
+        // Layer control
+        L.control.layers({
+            'OpenStreetMap': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map),
+            'Satellite': satellite
+        }).addTo(map);
+        
+        // Initialize FeatureGroup for drawn items
+        const drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+        
+        // Initialize draw control
+        const drawControl = new L.Control.Draw({
+            position: 'topleft',
+            draw: {
+                polygon: {
+                    allowIntersection: false,
+                    shapeOptions: {
+                        color: '#e94560',
+                        weight: 3,
+                        fillOpacity: 0.2
+                    }
+                },
+                rectangle: {
+                    shapeOptions: {
+                        color: '#e94560',
+                        weight: 3,
+                        fillOpacity: 0.2
+                    }
+                },
+                circle: false,
+                circlemarker: false,
+                marker: false,
+                polyline: false
+            },
+            edit: {
+                featureGroup: drawnItems
+            }
+        });
+        map.addControl(drawControl);
+        
+        // Current polygon coordinates
+        let currentPolygon = null;
+        
+        // Handle polygon creation
+        map.on(L.Draw.Event.CREATED, function(event) {
+            // Clear existing polygons
+            drawnItems.clearLayers();
+            
+            const layer = event.layer;
+            drawnItems.addLayer(layer);
+            
+            // Get coordinates
+            const coords = layer.getLatLngs()[0].map(latlng => [latlng.lng, latlng.lat]);
+            // Close the polygon
+            coords.push(coords[0]);
+            currentPolygon = coords;
+            
+            // Update UI
+            updateStatus(true);
+            updateCoordDisplay(coords);
+        });
+        
+        // Handle polygon edit
+        map.on(L.Draw.Event.EDITED, function(event) {
+            const layers = event.layers;
+            layers.eachLayer(function(layer) {
+                const coords = layer.getLatLngs()[0].map(latlng => [latlng.lng, latlng.lat]);
+                coords.push(coords[0]);
+                currentPolygon = coords;
+                updateCoordDisplay(coords);
+            });
+        });
+        
+        // Handle polygon delete
+        map.on(L.Draw.Event.DELETED, function(event) {
+            currentPolygon = null;
+            updateStatus(false);
+            document.getElementById('coordDisplay').textContent = 'No polygon drawn yet';
+        });
+        
+        function updateStatus(ready) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const btn = document.getElementById('analyzeBtn');
+            
+            if (ready) {
+                dot.classList.add('ready');
+                text.textContent = 'Region selected - Ready to analyze';
+                btn.disabled = false;
+            } else {
+                dot.classList.remove('ready');
+                text.textContent = 'Draw a polygon to begin';
+                btn.disabled = true;
+            }
+        }
+        
+        function updateCoordDisplay(coords) {
+            const display = document.getElementById('coordDisplay');
+            const formatted = coords.slice(0, -1).map((c, i) => 
+                `Point ${i + 1}: [${c[0].toFixed(4)}, ${c[1].toFixed(4)}]`
+            ).join('\n');
+            display.textContent = formatted;
+        }
+        
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        // Clear button
+        document.getElementById('clearBtn').addEventListener('click', function() {
+            drawnItems.clearLayers();
+            currentPolygon = null;
+            updateStatus(false);
+            document.getElementById('coordDisplay').textContent = 'No polygon drawn yet';
+        });
+        
+        // Analyze button
+        document.getElementById('analyzeBtn').addEventListener('click', async function() {
+            if (!currentPolygon) {
+                showToast('Please draw a polygon first', true);
+                return;
+            }
+            
+            const data = {
+                polygon: currentPolygon,
+                historical_start: document.getElementById('historicalStart').value,
+                historical_end: document.getElementById('historicalEnd').value,
+                recent_start: document.getElementById('recentStart').value,
+                recent_end: document.getElementById('recentEnd').value,
+                month: document.getElementById('month').value,
+                cloud_cover: document.getElementById('cloudCover').value,
+                output_name: document.getElementById('outputName').value,
+                clip_to_region: document.getElementById('clipToRegion').checked
+            };
+            
+            try {
+                this.disabled = true;
+                this.textContent = 'Processing...';
+                
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showToast('Analysis request submitted successfully!');
+                    console.log('Response:', result);
+                } else {
+                    showToast(result.message || 'Analysis failed', true);
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message, true);
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Run Analysis';
+            }
+        });
+    </script>
+</body>
+</html>
