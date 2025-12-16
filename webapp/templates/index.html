@@ -261,6 +261,25 @@
         .instructions strong {
             color: #e94560;
         }
+
+        .results-list {
+            list-style: none;
+            padding-left: 0;
+            margin: 8px 0 0;
+        }
+
+        .results-list li {
+            margin-bottom: 8px;
+        }
+
+        .results-list a {
+            color: #4da3ff;
+            text-decoration: none;
+        }
+
+        .results-list a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -356,6 +375,13 @@
             <button class="btn btn-secondary" id="clearBtn">
                 Clear Polygon
             </button>
+
+            <div class="section" id="resultsSection">
+                <div class="section-title">Results</div>
+                <div class="instructions" id="resultsContent">
+                    Run an analysis to generate output links here.
+                </div>
+            </div>
         </div>
         
         <!-- Map -->
@@ -500,6 +526,31 @@
             toast.className = 'toast show' + (isError ? ' error' : '');
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
+
+        function renderResults(outputs) {
+            const content = document.getElementById('resultsContent');
+            if (!outputs) {
+                content.textContent = 'No outputs generated yet.';
+                return;
+            }
+
+            let html = '';
+
+            if (outputs.html_map) {
+                html += `<p><a href="${outputs.html_map}" target="_blank">Open interactive map</a></p>`;
+            }
+
+            const renderList = (title, files) => {
+                if (!files || !files.length) return '';
+                const items = files.map(f => `<li><a href="${f}" target="_blank">${f.split('/').pop()}</a></li>`).join('');
+                return `<div class="results-block"><div class="section-title" style="margin-bottom:8px;font-size:0.8rem;">${title}</div><ul class="results-list">${items}</ul></div>`;
+            };
+
+            html += renderList('Raw Data', outputs.raw_files);
+            html += renderList('Visualized Layers', outputs.visualized_files);
+
+            content.innerHTML = html || 'Analysis completed, but no downloadable files were found.';
+        }
         
         // Clear button
         document.getElementById('clearBtn').addEventListener('click', function() {
@@ -507,6 +558,7 @@
             currentPolygon = null;
             updateStatus(false);
             document.getElementById('coordDisplay').textContent = 'No polygon drawn yet';
+            renderResults(null);
         });
         
         // Analyze button
@@ -544,6 +596,7 @@
                 
                 if (result.status === 'success') {
                     showToast('Analysis request submitted successfully!');
+                    renderResults(result.outputs);
                     console.log('Response:', result);
                 } else {
                     showToast(result.message || 'Analysis failed', true);
